@@ -498,3 +498,236 @@ def show_message(self, title, message):
 if __name__ == '__main__':
     PasswordManagerApp().run()
 ~~~
+
+# Желаемый результат
+~~~python
+from kivy.app import App
+from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.gridlayout import GridLayout
+from kivy.uix.scrollview import ScrollView
+from kivy.uix.label import Label
+from kivy.uix.textinput import TextInput
+from kivy.uix.button import Button
+from kivy.uix.popup import Popup
+from kivy.core.window import Window
+import random
+import string
+import json
+import os
+from datetime import datetime
+
+Window.clearcolor = (0.05, 0.05, 0.05, 1)
+Window.size = (400, 600)
+
+class PasswordManagerApp(App):
+    def __init__(self):
+        super().__init__()
+        self.entries = []
+        self.data_file = "passwords.json"
+        self.load_data()
+
+    def build(self):
+        main_layout = BoxLayout(orientation='vertical', padding=15, spacing=10)
+        
+        title = Label(
+            text='Менеджер паролей',
+            size_hint_y=None,
+            height=50,
+            font_size='22sp',
+            bold=True
+        )
+        main_layout.add_widget(title)
+        
+        input_layout = GridLayout(cols=2, size_hint_y=None, height=140, spacing=8)
+        
+        input_layout.add_widget(Label(text='Сервис:'))
+        self.service_input = TextInput(
+            multiline=False,
+            hint_text='Например: Google',
+            size_hint_y=None,
+            height=40
+        )
+        input_layout.add_widget(self.service_input)
+        
+        input_layout.add_widget(Label(text='Логин:'))
+        self.login_input = TextInput(
+            multiline=False,
+            hint_text='Email или логин',
+            size_hint_y=None,
+            height=40
+        )
+        input_layout.add_widget(self.login_input)
+        
+        input_layout.add_widget(Label(text='Пароль:'))
+        self.password_input = TextInput(
+            multiline=False,
+            hint_text='Введите пароль',
+            password=True,
+            size_hint_y=None,
+            height=40
+        )
+        input_layout.add_widget(self.password_input)
+        
+        main_layout.add_widget(input_layout)
+        
+        buttons_layout = BoxLayout(size_hint_y=None, height=50, spacing=10)
+        
+        add_btn = Button(
+            text='Добавить',
+            background_color=(0.2, 0.7, 0.3, 1)
+        )
+        add_btn.bind(on_press=self.add_password_entry)
+        buttons_layout.add_widget(add_btn)
+        
+        generate_btn = Button(
+            text='Сгенерировать',
+            background_color=(0.2, 0.5, 0.8, 1)
+        )
+        generate_btn.bind(on_press=self.generate_password)
+        buttons_layout.add_widget(generate_btn)
+        
+        main_layout.add_widget(buttons_layout)
+        
+        self.info_label = Label(
+            text=f'Всего записей: {len(self.entries)}',
+            size_hint_y=None,
+            height=35,
+            bold=True,
+            font_size='16sp'
+        )
+        main_layout.add_widget(self.info_label)
+        
+        scroll = ScrollView()
+        self.entries_list = BoxLayout(orientation='vertical', spacing=5, size_hint_y=None)
+        self.entries_list.bind(minimum_height=self.entries_list.setter('height'))
+        scroll.add_widget(self.entries_list)
+        main_layout.add_widget(scroll)
+        
+        self.update_entries_list()
+        return main_layout
+
+    def add_password_entry(self, instance):
+        service = self.service_input.text.strip()
+        login = self.login_input.text.strip()
+        password = self.password_input.text.strip()
+        
+        if not service or not login or not password:
+            self.show_message("Ошибка", "Заполните все поля!")
+            return
+        
+        new_entry = {
+            'id': len(self.entries) + 1,
+            'service': service,
+            'login': login,
+            'password': password,
+            'created_at': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        }
+        
+        self.entries.append(new_entry)
+        self.save_data()
+        self.service_input.text = ''
+        self.login_input.text = ''
+        self.password_input.text = ''
+        self.update_entries_list()
+
+    def generate_password(self, instance):
+        length = 12
+        characters = string.ascii_letters + string.digits + "!@#$%^&*"
+        password = ''.join(random.choice(characters) for _ in range(length))
+        self.password_input.text = password
+
+    def update_entries_list(self):
+        
+        self.entries_list.clear_widgets()
+        
+        for entry in self.entries:
+            entry_layout = BoxLayout(size_hint_y=None, height=40, spacing=5)
+            
+            service_label = Label(
+                text=entry['service'],
+                size_hint_x=0.4,
+                text_size=(None, None),
+                halign='left'
+            )
+            entry_layout.add_widget(service_label)
+            
+            login_label = Label(
+                text=entry['login'],
+                size_hint_x=0.4,
+                text_size=(None, None),
+                halign='left'
+            )
+            entry_layout.add_widget(login_label)
+            
+            view_btn = Button(
+                text='Просмотр',
+                size_hint_x=0.2,
+                background_color=(0.3, 0.3, 0.3, 1)
+            )
+            view_btn.bind(on_press=lambda x, eid=entry['id']: self.show_entry_details(eid))
+            entry_layout.add_widget(view_btn)
+            
+            self.entries_list.add_widget(entry_layout)
+        
+        self.info_label.text = f'Всего записей: {len(self.entries)}'
+
+    def show_entry_details(self, entry_id):
+        entry = next((e for e in self.entries if e['id'] == entry_id), None)
+        if not entry:
+            return
+        
+        content = BoxLayout(orientation='vertical', spacing=10, padding=10)
+        content.add_widget(Label(text=f"Сервис: {entry['service']}"))
+        content.add_widget(Label(text=f"Логин: {entry['login']}"))
+        content.add_widget(Label(text=f"Пароль: {entry['password']}"))
+        
+        buttons_layout = BoxLayout(size_hint_y=None, height=50, spacing=5)
+        
+        delete_btn = Button(text='Удалить')
+        delete_btn.bind(on_press=lambda x: self.delete_entry(entry_id))
+        buttons_layout.add_widget(delete_btn)
+        
+        close_btn = Button(text='Закрыть')
+        close_btn.bind(on_press=lambda x: popup.dismiss())
+        buttons_layout.add_widget(close_btn)
+        
+        content.add_widget(buttons_layout)
+        
+        popup = Popup(title='Детали записи', content=content, size_hint=(0.8, 0.5))
+        popup.open()
+
+    def delete_entry(self, entry_id):
+        self.entries = [entry for entry in self.entries if entry['id'] != entry_id]
+        self.save_data()
+        self.update_entries_list()
+        self.show_message("Успех", "Запись удалена!")
+
+    def load_data(self):
+        try:
+            if os.path.exists(self.data_file):
+                with open(self.data_file, 'r', encoding='utf-8') as f:
+                    self.entries = json.load(f)
+        except:
+            self.entries = []
+
+    def save_data(self):
+        try:
+            with open(self.data_file, 'w', encoding='utf-8') as f:
+                json.dump(self.entries, f, ensure_ascii=False, indent=2)
+        except:
+            pass
+
+    def show_message(self, title, message):
+        content = BoxLayout(orientation='vertical', spacing=10, padding=10)
+        content.add_widget(Label(text=message))
+        
+        ok_btn = Button(text='OK', size_hint_y=None, height=40)
+        content.add_widget(ok_btn)
+        
+        popup = Popup(title=title, content=content, size_hint=(0.6, 0.4))
+        ok_btn.bind(on_press=popup.dismiss)
+        popup.open()
+
+if __name__ == '__main__':
+    PasswordManagerApp().run()
+~~~
